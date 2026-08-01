@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Hollowhound — Scanner</title>
+<style>
+  :root{
+    --cyan:#4fe9e9; --cyan-h:#8bfff2;
+    --mag:#ff3db4;  --mag-h:#ff86d3;
+    --danger:#ff3b6b; --ok:#22e0a1;
+    --ink:#eafcff; --muted:#9fb6cf;
+    --glass-tint:rgba(20,32,54,0.32);
+    --glass-tint-lite:rgba(20,32,54,0.20);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:"Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,sans-serif;
+    color:var(--ink);min-height:100vh;background:#05070f;padding:24px;position:relative;overflow-x:hidden;
+  }
+
+  /* ---------- LIVING BACKGROUND ---------- */
+  .bg{position:fixed;inset:-15%;z-index:0;filter:saturate(135%)}
+  .blob{position:absolute;border-radius:50%;filter:blur(70px);mix-blend-mode:screen;opacity:.8}
+  .b1{width:44vw;height:44vw;background:radial-gradient(circle,#00f6ff,transparent 65%);top:-8%;left:-8%;animation:drift1 19s ease-in-out infinite}
+  .b2{width:42vw;height:42vw;background:radial-gradient(circle,#ff2fb0,transparent 65%);bottom:-12%;right:-8%;animation:drift2 23s ease-in-out infinite}
+  .b3{width:32vw;height:32vw;background:radial-gradient(circle,#a052ff,transparent 65%);top:40%;left:55%;animation:drift3 27s ease-in-out infinite}
+  .b4{width:26vw;height:26vw;background:radial-gradient(circle,#18ffd5,transparent 60%);top:65%;left:6%;animation:drift1 21s ease-in-out infinite reverse}
+  @keyframes drift1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(7vw,6vh) scale(1.16)}}
+  @keyframes drift2{0%,100%{transform:translate(0,0) scale(1.05)}50%{transform:translate(-6vw,-5vh) scale(.9)}}
+  @keyframes drift3{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-6vw,6vh) scale(1.18)}}
+  .grid{position:fixed;inset:0;z-index:0;opacity:.12;
+    background-image:linear-gradient(rgba(120,200,255,.5) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(120,200,255,.5) 1px,transparent 1px);
+    background-size:46px 46px;
+    mask:radial-gradient(circle at 50% 30%,#000 20%,transparent 80%);
+    -webkit-mask:radial-gradient(circle at 50% 30%,#000 20%,transparent 80%)}
+  .vignette{position:fixed;inset:0;z-index:1;pointer-events:none;
+    background:radial-gradient(130% 100% at 50% 0%,transparent 45%,rgba(3,4,10,.7) 100%)}
+
+  .wrap{max-width:960px;margin:0 auto;position:relative;z-index:2}
+
+  /* ---------- GLASS PRIMITIVE ---------- */
+  .glass{position:relative;border-radius:24px;overflow:hidden;isolation:isolate}
+  .glass .refract{position:absolute;inset:0;z-index:-2;
+    backdrop-filter:blur(3px) brightness(1.1) saturate(150%);
+    -webkit-backdrop-filter:blur(3px) brightness(1.1) saturate(150%);
+    filter:url(#liquid)}
+  .glass .tint{position:absolute;inset:0;z-index:-1;background:var(--glass-tint);
+    box-shadow:inset 0 1px 1px rgba(255,255,255,.45),
+               inset 0 -16px 40px rgba(0,0,0,.32),
+               inset 0 36px 60px -34px rgba(120,220,255,.22)}
+  .glass .sheen{position:absolute;inset:0;z-index:-1;pointer-events:none;
+    background:linear-gradient(135deg,rgba(255,255,255,.45),rgba(255,255,255,0) 44%);
+    mix-blend-mode:screen;opacity:.5}
+  .glass::after{content:"";position:absolute;inset:0;border-radius:inherit;padding:1.4px;
+    background:linear-gradient(135deg,var(--cyan) 0%,rgba(255,255,255,.85) 48%,var(--mag) 100%);
+    -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+    -webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;opacity:.7}
+  .glass.lite .tint{background:var(--glass-tint-lite)}
+  .shadow{box-shadow:0 24px 60px -22px rgba(0,0,0,.7),0 0 46px -16px rgba(79,233,233,.28),0 0 60px -20px rgba(255,61,180,.24)}
+
+  /* ---------- HEADER ---------- */
+  header.top{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:22px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:14px}
+  .brand img{width:48px;height:48px;border-radius:13px;box-shadow:0 6px 20px rgba(0,0,0,.55),0 0 22px -4px rgba(79,233,233,.5)}
+  .brand h1{font-size:26px;font-weight:800;letter-spacing:.4px;
+    background:linear-gradient(100deg,var(--cyan-h),#fff 42%,var(--mag-h));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  a.back{font-size:13px;color:var(--muted);text-decoration:none;padding:9px 16px;border-radius:12px;
+    border:1px solid rgba(190,230,255,.2);background:rgba(255,255,255,.04);backdrop-filter:blur(6px);transition:.2s}
+  a.back:hover{color:var(--cyan);border-color:rgba(79,233,233,.5)}
+
+  .panel{padding:24px;margin-bottom:20px}
+
+  /* ---------- BUTTONS ---------- */
+  .btn{position:relative;cursor:pointer;border:none;font-size:15px;font-weight:750;letter-spacing:.3px;
+    color:#04121f;padding:14px 26px;border-radius:14px;overflow:hidden;
+    background:linear-gradient(100deg,var(--cyan),var(--mag));
+    box-shadow:0 8px 24px -6px rgba(79,233,233,.45),0 8px 24px -6px rgba(255,61,180,.4),inset 0 1px 0 rgba(255,255,255,.55);
+    transition:transform .14s ease,box-shadow .24s ease,opacity .2s}
+  .btn:hover{transform:translateY(-2px)}
+  .btn:disabled{opacity:.35;cursor:not-allowed;transform:none;box-shadow:none;background:rgba(255,255,255,.08);color:var(--muted)}
+  .btn.ghost{background:rgba(255,255,255,.05);color:var(--ink);border:1px solid rgba(190,230,255,.25);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.2);backdrop-filter:blur(6px)}
+  .btn.ghost:hover{border-color:rgba(79,233,233,.55);color:var(--cyan-h)}
+  .btn.danger{background:linear-gradient(100deg,var(--danger),var(--mag));color:#fff;
+    box-shadow:0 8px 24px -6px rgba(255,59,107,.5),inset 0 1px 0 rgba(255,255,255,.4)}
+  .btn.sm{padding:10px 18px;font-size:13px}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+
+  .opts{display:flex;gap:20px;flex-wrap:wrap;margin-top:18px}
+  .opt{display:flex;align-items:center;gap:10px;font-size:13.5px;color:var(--muted)}
+  .opt input{width:18px;height:18px;accent-color:var(--mag)}
+  .status{margin-top:16px;font-size:13.5px;color:var(--muted);min-height:20px}
+  .status .path{color:var(--cyan);word-break:break-all;font-weight:600}
+  .fine{font-size:12px;color:var(--muted);line-height:1.55;margin-top:12px}
+  code{background:rgba(255,255,255,.09);padding:1px 7px;border-radius:6px;font-size:12px;color:var(--cyan-h)}
+
+  /* ---------- LIVE SCAN PROGRESS ---------- */
+  .progress-wrap{display:none;margin-top:18px}
+  .progress-wrap.show{display:block;animation:fade .25s ease}
+  .prog-head{display:flex;align-items:center;gap:11px;margin-bottom:13px}
+  .prog-spin{width:22px;height:22px;border:2.5px solid rgba(255,255,255,.14);
+    border-top-color:var(--cyan);border-right-color:var(--mag);border-radius:50%;
+    animation:sp .7s linear infinite;flex-shrink:0;
+    filter:drop-shadow(0 0 6px rgba(79,233,233,.6))}
+  .prog-title{font-size:14px;font-weight:700;color:var(--ink);letter-spacing:.3px}
+  /* indeterminate glass track */
+  .prog-track{position:relative;height:9px;border-radius:999px;overflow:hidden;
+    background:rgba(255,255,255,.06);border:1px solid rgba(190,230,255,.18);
+    box-shadow:inset 0 1px 3px rgba(0,0,0,.4)}
+  .prog-track .comet{position:absolute;top:0;bottom:0;width:38%;border-radius:999px;
+    background:linear-gradient(90deg,transparent,var(--cyan),#fff,var(--mag),transparent);
+    box-shadow:0 0 14px rgba(79,233,233,.7),0 0 20px rgba(255,61,180,.5);
+    animation:comet 1.35s cubic-bezier(.65,0,.35,1) infinite}
+  @keyframes comet{0%{left:-40%}100%{left:100%}}
+  /* live counters */
+  .prog-stats{display:flex;gap:22px;flex-wrap:wrap;margin-top:14px}
+  .pstat{display:flex;flex-direction:column;gap:2px}
+  .pstat .pv{font-size:22px;font-weight:850;line-height:1;font-variant-numeric:tabular-nums}
+  .pstat.f .pv{color:var(--cyan)}
+  .pstat.d .pv{color:var(--mag-h)}
+  .pstat.e .pv{color:var(--ok)}
+  .pstat .pl{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px}
+  .prog-current{margin-top:14px;font-size:12px;color:var(--muted);
+    display:flex;align-items:center;gap:8px;min-width:0}
+  .prog-current .lbl{color:var(--cyan-h);flex-shrink:0;font-weight:600}
+  .prog-current .cpath{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    direction:rtl;text-align:left;font-family:ui-monospace,"Cascadia Code",monospace;opacity:.85}
+
+  /* ---------- STATS ---------- */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:20px}
+  .stat{padding:18px;text-align:center}
+  .stat .n{font-size:32px;font-weight:850;line-height:1}
+  .stat .l{font-size:11.5px;color:var(--muted);margin-top:7px;text-transform:uppercase;letter-spacing:.7px}
+  .stat.files .n{color:var(--cyan)}
+  .stat.folders .n{color:var(--mag-h)}
+  .stat.prot .n{color:var(--mag)}
+  .stat.sel .n{color:var(--ok)}
+
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+  .toolbar .spacer{flex:1}
+
+  section.group{margin-bottom:18px}
+  .group h2{font-size:15.5px;margin-bottom:11px;display:flex;align-items:center;gap:9px}
+  .group h2 .badge{font-size:11px;padding:3px 10px;border-radius:999px;background:rgba(255,255,255,.1);color:var(--muted);font-weight:600}
+  .warnbox{font-size:12.5px;color:#ffdcec;background:rgba(255,61,180,.12);
+    border:1px solid rgba(255,61,180,.4);border-radius:13px;padding:12px 15px;margin-bottom:11px;line-height:1.55}
+  ul.list{list-style:none;max-height:360px;overflow:auto;border-radius:14px;padding:6px}
+  ul.list::-webkit-scrollbar{width:8px}
+  ul.list::-webkit-scrollbar-thumb{background:linear-gradient(var(--cyan),var(--mag));border-radius:8px;opacity:.6}
+  li.item{display:flex;align-items:center;gap:13px;padding:11px 13px;border-radius:12px;
+    background:rgba(255,255,255,.035);border:1px solid transparent;margin:6px 2px;transition:.15s}
+  li.item:hover{background:rgba(255,255,255,.075);border-color:rgba(190,230,255,.25);
+    box-shadow:0 0 22px -8px rgba(79,233,233,.5)}
+  li.item input{width:18px;height:18px;accent-color:var(--ok);flex-shrink:0}
+  li.item .ico{font-size:18px;flex-shrink:0}
+  li.item .meta{min-width:0;flex:1}
+  li.item .name{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  li.item .sub{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  li.item .tag{font-size:10.5px;padding:3px 9px;border-radius:999px;background:rgba(255,61,180,.2);color:var(--mag-h);flex-shrink:0;border:1px solid rgba(255,61,180,.35)}
+  li.item.gone{opacity:.32;text-decoration:line-through}
+  .empty-msg{text-align:center;color:var(--muted);padding:28px;font-size:14px}
+  #results{display:none}
+  .hidden{display:none!important}
+
+  /* ---------- MODAL ---------- */
+  .overlay{position:fixed;inset:0;background:rgba(3,5,14,.55);backdrop-filter:blur(8px);
+    display:none;align-items:center;justify-content:center;z-index:60;padding:20px}
+  .overlay.show{display:flex;animation:fade .2s ease}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .modal{width:min(92vw,430px);padding:30px;text-align:center}
+  .modal .warn-ico{font-size:40px;filter:drop-shadow(0 0 16px var(--danger));margin-bottom:10px}
+  .modal h3{font-size:21px;margin-bottom:11px}
+  .modal p{font-size:14px;color:var(--muted);line-height:1.6;margin-bottom:24px}
+  .modal .row{justify-content:center}
+  .spin{width:15px;height:15px;border:2px solid rgba(255,255,255,.25);border-top-color:var(--cyan);
+    border-radius:50%;display:inline-block;animation:sp .7s linear infinite;vertical-align:-2px;margin-right:7px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+  <div class="bg"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div><div class="blob b4"></div></div>
+  <div class="grid"></div><div class="vignette"></div>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><img src="logo.png" alt="Hollowhound"/><h1>Hollowhound</h1></div>
+    <a class="back" href="index.html">← Home</a>
+  </header>
+
+  <!-- SCAN PANEL -->
+  <div class="glass shadow panel" id="scanPanel">
+    <span class="refract"></span><span class="tint"></span><span class="sheen"></span>
+    <div class="row">
+      <button class="btn" id="pickBtn">📂 Choose folder &amp; scan</button>
+      <button class="btn ghost sm" id="rescanBtn" disabled>↻ Re-scan</button>
+    </div>
+    <div class="opts">
+      <label class="opt"><input type="checkbox" id="optWhitespace"> Treat whitespace-only text files as empty</label>
+      <label class="opt"><input type="checkbox" id="optFolders" checked> Include empty folders</label>
+    </div>
+    <div class="status" id="status">Pick a folder (tip: choose your storage root to sweep everything). Scans run locally on your device.</div>
+    <div class="fine" id="compat"></div>
+
+    <!-- LIVE PROGRESS -->
+    <div class="progress-wrap" id="progress">
+      <div class="prog-head">
+        <div class="prog-spin"></div>
+        <div class="prog-title">Sweeping storage…</div>
+      </div>
+      <div class="prog-track"><div class="comet"></div></div>
+      <div class="prog-stats">
+        <div class="pstat d"><span class="pv" id="pFolders">0</span><span class="pl">Folders walked</span></div>
+        <div class="pstat f"><span class="pv" id="pFiles">0</span><span class="pl">Files scanned</span></div>
+        <div class="pstat e"><span class="pv" id="pHits">0</span><span class="pl">Empties found</span></div>
+      </div>
+      <div class="prog-current"><span class="lbl">Now:</span><span class="cpath" id="pCurrent">…</span></div>
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div id="results">
+    <div class="stats">
+      <div class="glass shadow stat files"><span class="refract"></span><span class="tint"></span><span class="sheen"></span><div class="n" id="cFiles">0</div><div class="l">Empty files</div></div>
+      <div class="glass shadow stat folders"><span class="refract"></span><span class="tint"></span><span class="sheen"></span><div class="n" id="cFolders">0</div><div class="l">Empty folders</div></div>
+      <div class="glass shadow stat prot"><span class="refract"></span><span class="tint"></span><span class="sheen"></span><div class="n" id="cProt">0</div><div class="l">Protected</div></div>
+      <div class="glass shadow stat sel"><span class="refract"></span><span class="tint"></span><span class="sheen"></span><div class="n" id="cSel">0</div><div class="l">Selected</div></div>
+    </div>
+
+    <div class="glass shadow panel">
+      <span class="refract"></span><span class="tint"></span><span class="sheen"></span>
+      <div class="toolbar">
+        <button class="btn ghost sm" id="selAll">Select all safe</button>
+        <button class="btn ghost sm" id="selNone">Clear</button>
+        <span class="spacer"></span>
+        <button class="btn danger sm" id="delSel" disabled>🗑️ Delete selected</button>
+        <button class="btn danger sm" id="wipeAll" disabled>💥 Wipe all safe</button>
+      </div>
+
+      <section class="group" id="grpFiles">
+        <h2>📄 Empty files <span class="badge" id="bFiles">0</span></h2>
+        <ul class="list" id="listFiles"></ul>
+      </section>
+
+      <section class="group" id="grpFolders">
+        <h2>🗂️ Empty folders <span class="badge" id="bFolders">0</span></h2>
+        <ul class="list" id="listFolders"></ul>
+      </section>
+
+      <section class="group" id="grpProt">
+        <h2>🛡️ Protected placeholders <span class="badge" id="bProt">0</span></h2>
+        <div class="warnbox">These files are <strong>intentionally empty</strong> and keep things working
+          (<code>.gitkeep</code>, <code>.nomedia</code>, <code>__init__.py</code>, etc.).
+          They’re <strong>excluded from “Wipe all”</strong> and unchecked by default. Tick one only if you’re sure.</div>
+        <ul class="list" id="listProt"></ul>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM MODAL -->
+<div class="overlay" id="overlay">
+  <div class="glass shadow modal">
+    <span class="refract"></span><span class="tint"></span><span class="sheen"></span>
+    <div class="warn-ico">⚠️</div>
+    <h3 id="mTitle">Delete permanently?</h3>
+    <p id="mBody">This cannot be undone.</p>
+    <div class="row">
+      <button class="btn ghost" id="mCancel">Cancel</button>
+      <button class="btn danger" id="mConfirm">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- SVG light-warping filter -->
+<svg width="0" height="0" style="position:absolute">
+  <filter id="liquid" x="-20%" y="-20%" width="140%" height="140%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.006 0.009" numOctaves="2" seed="42" result="noise"/>
+    <feGaussianBlur in="noise" stdDeviation="1.4" result="soft"/>
+    <feDisplacementMap in="SourceGraphic" in2="soft" scale="52" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
+
+<script>
+/* ---------- protected / placeholder rules ---------- */
+const PROTECTED_NAMES = new Set([
+  '.gitkeep','.keep','.gitignore','.gitattributes','.gitmodules',
+  '.nomedia','.keepme','.placeholder','py.typed','__init__.py',
+  '.lock','lock','.watchmanconfig','.npmignore','.dockerignore','.htaccess'
+]);
+const PROTECTED_DIR_PARTS = new Set(['.git','node_modules','.svn','.hg']);
+function inProtectedTree(path){return path.split('/').some(p=>PROTECTED_DIR_PARTS.has(p));}
+function isProtectedName(name){
+  if(PROTECTED_NAMES.has(name)) return true;
+  if(name.startsWith('.env')) return true;
+  return false;
+}
+
+/* ---------- state ---------- */
+let rootHandle=null;
+let emptyFiles=[], emptyFolders=[], protectedFiles=[];
+const idMap=new Map();
+
+/* ---------- live progress counters ---------- */
+let pFolders=0, pFiles=0, pHits=0, lastPaint=0;
+const el=id=>document.getElementById(id);
+function paintProgress(force){
+  const now=performance.now();
+  if(!force && now-lastPaint<60) return; // throttle to ~16fps
+  lastPaint=now;
+  el('pFolders').textContent=pFolders.toLocaleString();
+  el('pFiles').textContent=pFiles.toLocaleString();
+  el('pHits').textContent=pHits.toLocaleString();
+}
+function setCurrent(path){el('pCurrent').textContent=path;}
+
+/* ---------- compat ---------- */
+const compatEl=el('compat');
+if(!('showDirectoryPicker' in window)){
+  compatEl.innerHTML='⚠️ This browser can’t access folders (File System Access API missing). Use the Median APK, Chrome/Edge on Android, or desktop Chromium.';
+}
+
+/* ---------- scanning ---------- */
+async function isWhitespaceOnly(fileHandle){
+  try{const f=await fileHandle.getFile();if(f.size>4096)return false;const t=await f.text();return t.trim().length===0&&t.length>0;}catch(e){return false;}
+}
+async function walk(dirHandle,path){
+  let fileCountInSubtree=0;
+  const optWs=el('optWhitespace').checked;
+  pFolders++;
+  setCurrent(path);
+  paintProgress();
+  // yield so the UI can repaint during big scans
+  await new Promise(r=>setTimeout(r,0));
+  for await (const entry of dirHandle.values()){
+    const childPath=path?path+'/'+entry.name:entry.name;
+    if(entry.kind==='file'){
+      pFiles++;
+      if((pFiles & 31)===0){setCurrent(childPath);paintProgress();}
+      let sizeZero=false,file=null;
+      try{file=await entry.getFile();sizeZero=file.size===0;}catch(e){continue;}
+      let treatEmpty=sizeZero;
+      if(!treatEmpty&&optWs)treatEmpty=await isWhitespaceOnly(entry);
+      if(treatEmpty){
+        pHits++;
+        const rec={name:entry.name,path:childPath,parent:dirHandle,handle:entry,kind:'file'};
+        if(isProtectedName(entry.name)||inProtectedTree(childPath))protectedFiles.push(rec);
+        else emptyFiles.push(rec);
+      }else{fileCountInSubtree++;}
+    }else if(entry.kind==='directory'){
+      if(inProtectedTree(childPath)){fileCountInSubtree++;continue;}
+      const sub=await walk(entry,childPath);
+      fileCountInSubtree+=sub;
+      if(sub===0&&el('optFolders').checked){
+        pHits++;
+        emptyFolders.push({name:entry.name,path:childPath,parent:dirHandle,handle:entry,kind:'dir',depth:childPath.split('/').length});
+      }
+    }
+  }
+  return fileCountInSubtree;
+}
+async function startScan(){
+  emptyFiles=[];emptyFolders=[];protectedFiles=[];idMap.clear();
+  pFolders=0;pFiles=0;pHits=0;
+  const status=el('status');
+  el('results').style.display='none';
+  el('progress').classList.add('show');
+  status.innerHTML='Scanning <span class="path">'+rootHandle.name+'</span> …';
+  paintProgress(true);
+  try{await walk(rootHandle,rootHandle.name);}
+  catch(e){status.textContent='⚠️ Scan error: '+e.message;el('progress').classList.remove('show');return;}
+  paintProgress(true);
+  emptyFolders.sort((a,b)=>b.depth-a.depth);
+  render();
+  el('progress').classList.remove('show');
+  status.innerHTML='✅ Scan complete on <span class="path">'+rootHandle.name+'</span> · '+
+    pFolders.toLocaleString()+' folders, '+pFiles.toLocaleString()+' files checked.';
+  el('rescanBtn').disabled=false;
+}
+
+/* ---------- rendering ---------- */
+function makeItem(rec,id){
+  const li=document.createElement('li');li.className='item';li.dataset.id=id;
+  const cb=document.createElement('input');cb.type='checkbox';cb.dataset.id=id;cb.checked=false;
+  cb.addEventListener('change',updateSelCount);
+  const ico=document.createElement('span');ico.className='ico';ico.textContent=rec.kind==='file'?'📄':'🗂️';
+  const meta=document.createElement('div');meta.className='meta';
+  const nm=document.createElement('div');nm.className='name';nm.textContent=rec.name;
+  const sb=document.createElement('div');sb.className='sub';sb.textContent=rec.path;
+  meta.appendChild(nm);meta.appendChild(sb);
+  li.appendChild(cb);li.appendChild(ico);li.appendChild(meta);
+  if(rec.protected){const tag=document.createElement('span');tag.className='tag';tag.textContent='protected';li.appendChild(tag);}
+  return li;
+}
+function render(){
+  const lf=el('listFiles'),lo=el('listFolders'),lp=el('listProt');
+  lf.innerHTML=lo.innerHTML=lp.innerHTML='';let i=0;
+  emptyFiles.forEach(r=>{const id='f'+(i++);idMap.set(id,r);lf.appendChild(makeItem(r,id));});
+  emptyFolders.forEach(r=>{const id='d'+(i++);idMap.set(id,r);lo.appendChild(makeItem(r,id));});
+  protectedFiles.forEach(r=>{r.protected=true;const id='p'+(i++);idMap.set(id,r);lp.appendChild(makeItem(r,id));});
+  if(!emptyFiles.length)lf.innerHTML='<div class="empty-msg">None found 🎉</div>';
+  if(!emptyFolders.length)lo.innerHTML='<div class="empty-msg">None found 🎉</div>';
+  if(!protectedFiles.length)el('grpProt').classList.add('hidden');
+  else el('grpProt').classList.remove('hidden');
+  el('cFiles').textContent=emptyFiles.length;
+  el('cFolders').textContent=emptyFolders.length;
+  el('cProt').textContent=protectedFiles.length;
+  el('bFiles').textContent=emptyFiles.length;
+  el('bFolders').textContent=emptyFolders.length;
+  el('bProt').textContent=protectedFiles.length;
+  el('results').style.display='block';
+  updateSelCount();
+}
+function allCheckboxes(){return [...document.querySelectorAll('li.item input[type=checkbox]')];}
+function itemGone(cb){return cb.closest('li').classList.contains('gone');}
+function updateSelCount(){
+  const n=allCheckboxes().filter(c=>c.checked&&!itemGone(c)).length;
+  el('cSel').textContent=n;
+  el('delSel').disabled=n===0;
+  const safe=emptyFiles.length+emptyFolders.length;
+  el('wipeAll').disabled=safe===0;
+}
+
+/* ---------- deletion ---------- */
+async function deleteRecord(rec){
+  try{
+    if(rec.kind==='file')await rec.parent.removeEntry(rec.name);
+    else await rec.parent.removeEntry(rec.name,{recursive:true});
+    return true;
+  }catch(e){console.warn('Failed',rec.path,e);return false;}
+}
+async function deleteByIds(ids){
+  const recs=ids.map(id=>({id,rec:idMap.get(id)})).filter(x=>x.rec);
+  recs.sort((a,b)=>{const ak=a.rec.kind==='file'?0:1,bk=b.rec.kind==='file'?0:1;if(ak!==bk)return ak-bk;return (b.rec.depth||0)-(a.rec.depth||0);});
+  let ok=0,fail=0;
+  for(const {id,rec} of recs){
+    const done=await deleteRecord(rec);
+    const li=document.querySelector('li.item[data-id="'+id+'"]');
+    if(done){ok++;if(li){li.classList.add('gone');const cb=li.querySelector('input');if(cb)cb.checked=false;}}
+    else fail++;
+  }
+  updateSelCount();
+  el('status').innerHTML='✅ Deleted '+ok+' item'+(ok!==1?'s':'')+(fail?(' · ⚠️ '+fail+' failed'):'')+'. Re-scan to refresh folder emptiness.';
+}
+
+/* ---------- modal ---------- */
+let pendingIds=null;
+function confirmDelete(title,body,ids){
+  pendingIds=ids;
+  el('mTitle').textContent=title;
+  el('mBody').textContent=body;
+  el('overlay').classList.add('show');
+}
+el('mCancel').onclick=()=>{el('overlay').classList.remove('show');pendingIds=null;};
+el('mConfirm').onclick=async()=>{el('overlay').classList.remove('show');const ids=pendingIds;pendingIds=null;if(ids)await deleteByIds(ids);};
+
+/* ---------- wiring ---------- */
+el('pickBtn').onclick=async()=>{
+  try{rootHandle=await window.showDirectoryPicker({mode:'readwrite'});}catch(e){return;}
+  await startScan();
+};
+el('rescanBtn').onclick=()=>{if(rootHandle)startScan();};
+el('selAll').onclick=()=>{
+  allCheckboxes().forEach(cb=>{const rec=idMap.get(cb.dataset.id);if(rec&&!rec.protected&&!itemGone(cb))cb.checked=true;});updateSelCount();
+};
+el('selNone').onclick=()=>{allCheckboxes().forEach(cb=>cb.checked=false);updateSelCount();};
+el('delSel').onclick=()=>{
+  const ids=allCheckboxes().filter(c=>c.checked&&!itemGone(c)).map(c=>c.dataset.id);
+  if(!ids.length)return;
+  confirmDelete('Delete '+ids.length+' selected item'+(ids.length!==1?'s':'')+'?','This permanently deletes them from your device. There is no recycle bin.',ids);
+};
+el('wipeAll').onclick=()=>{
+  const ids=[...idMap.keys()].filter(id=>{const r=idMap.get(id);return r&&!r.protected;})
+    .filter(id=>{const li=document.querySelector('li.item[data-id="'+id+'"]');return li&&!li.classList.contains('gone');});
+  if(!ids.length)return;
+  confirmDelete('Wipe all '+ids.length+' safe item'+(ids.length!==1?'s':'')+'?','Permanently deletes every empty file and empty folder listed above. Protected placeholders are NOT touched.',ids);
+};
+</script>
+</body>
+</html>
